@@ -32,11 +32,11 @@ const long spiBaud = 100000; // SPI Communication Baud Rate
 const byte chip_signature_atmega328p[3] = {0x1E, 0x95, 0x0F};
 const String chip_name_atmega328p = "ATmega328P";
 // ===  ATmega328P Fuse and Lock Bytes ===
-static byte FUSE_L = 0xFF; // Example: Low fuse for external crystal >8MHz, default startup <- Gemini Def, double check!! Value from PlatformIO value
-static byte FUSE_H = 0xDA; // Example: High fuse (BOOTSZ=2048W_3800, EESAVE, SPIEN enabled) <- Gemini Def, double check!! Value from PlatformIO value
-static byte FUSE_E = 0xFD; // Example: Extended fuse (BODLEVEL=2.7V) <- Gemini Def, double check!! Value from PlatformIO value
-// static byte LOCK_BITS_VAL = 0xCF; // Recommended: No further programming/verification (SPM/LPM in App section disabled). 0x3F for no locks.
-static byte LOCK_BITS_VAL = 0x3F; // No locks applied
+const byte FUSE_L = 0xFF; // Example: Low fuse for external crystal >8MHz, default startup <- Gemini Def, double check!! Value from PlatformIO value
+const byte FUSE_H = 0xDA; // Example: High fuse (BOOTSZ=2048W_3800, EESAVE, SPIEN enabled) <- Gemini Def, double check!! Value from PlatformIO value
+const byte FUSE_E = 0xFD; // Example: Extended fuse (BODLEVEL=2.7V) <- Gemini Def, double check!! Value from PlatformIO value
+// const byte LOCK_BITS_VAL = 0xCF; // Recommended: No further programming/verification (SPM/LPM in App section disabled). 0x3F for no locks.
+const byte LOCK_BITS_VAL = 0x3F; // No locks applied
 // === Gemini Parsing Variables ===
 uint8_t pageDataBuffer[PAGE_SIZE_BYTES];
 int bytesInPageBuffer = 0;
@@ -182,7 +182,12 @@ bool megaProgramMode() {
     Serial.println("[MEGA] Recieved 0x53 at expected chip response byte[2]\n");
     return true;
   } else {
-    Serial.println("[MEGA] Failed to initiate programming mode...\n");
+    // ATmega328P Datasheet 27.8.2 Serial Programming Algorithm (page:255)
+    // "If the 0x53 did not echo back, give RESET a positive pulse and issue a new programming enable command."
+    Serial.println("[MEGA] Failed to initiate programming mode...");
+    Serial.println("[MEGA] Giving RESET a positive pulse...");
+    megaUp();
+    megaDown();
     return false;
   }
 }
@@ -192,15 +197,15 @@ void megaProgramFuses() {
   const byte fuseH[4] = {0xAC, 0xA8, 0x00, FUSE_H};
   const byte fuseE[4] = {0xAC, 0xA4, 0x00, FUSE_E};
   const byte lockBits[4] = {0xAC, 0xE0, 0x00, LOCK_BITS_VAL};
-  Serial.println("[MEGA] Attempting to program Fuse L...")
+  Serial.println("[MEGA] Attempting to program Fuse L...");
   megaSendCommand(fuseL);
-  Serial.println("[MEGA] Attempting to program Fuse H...")
+  Serial.println("[MEGA] Attempting to program Fuse H...");
   megaSendCommand(fuseH);
-  Serial.println("[MEGA] Attempting to program Fuse E...")
+  Serial.println("[MEGA] Attempting to program Fuse E...");
   megaSendCommand(fuseE);
-  Serial.println("[MEGA] Attempting to program Lock Bits...")
+  Serial.println("[MEGA] Attempting to program Lock Bits...");
   megaSendCommand(lockBits);
-  Serial.println("[MEGA] All commands for fuses and lock bits have been sent...\n")
+  Serial.println("[MEGA] All commands for fuses and lock bits have been sent...\n");
 }
 // === Flashing and Parsing Functions ===
 // ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256)
@@ -218,14 +223,67 @@ void flushPageBuffer() {
 }
 */
 // CO 
-void flashByte() {
-  - 
+void flashBytes(bool high, uint16_t addr, uint16_t data) {
+  const byte flashCommand[4];
+  flashCommand[0] = high ? 0x48 : 0x40;
+  flashCommand[1] = (addr >> 8) & 0xFF;
+  flashCommand[2] = addr & 0xFF;
+  flashCommand[3] = data;
+  Serial.print("[FLASH] Writing " + high ? "HIGH" : "LOW");
+  Serial.print(" byte at 0x"); Serial.print(addr, HEX); 
+  Serial.print(" = 0x"); Serial.print(data, HEX);
+  megaSendCommand(flashCommand);
 }
-void commitPage() {
-  -
+void commitPage(uint16_t addr) {
+  const byte commitCommand[4];
+  commitCommand[0] = 0x4C;
+  commitCommand[1] = (addr >> 8) & 0xFF;
+  commitCommand[2] = addr & 0xFF;
+  commitCommand[3] = 0x00;
+  megaSendCommand(commitCommand);
+  delay(15);
+  Serial.print("[FLASH] Page committed at 0x"); Serial.println(addr, HEX);
 }
 bool flashHex() {
-  -
+  // ATmega328P Datasheet 27.8.2 Serial Programming Algorithm (page:255)
+  // "To ensure correct loading of the page, the data low byte must be loaded before data high byte is applied for a given address."
+  Serial.println("\n[FLASH] Starting to flash firmware.hex...");
+  megaDown();
+  sdUp();
+  File hexFile = SD.open(targetFile);
+  if (!hexFile) {
+    Serial.println("[FLASH] Failed to open firmware.hex...\n");
+    return;
+  }
+  uint16_t pageAddr = 0;
+  const uint16_t pageSize = 64;
+  while (hexFile.available()) {
+    String line = hexFile.readStringUntil('\n').trim();
+    if (line.charAT(0) != ':') {
+      Serial.println("[FLASH] !!ERROR!! firmware.hex line did NOT start with ':'")
+      continue;
+    }
+    int byteCount = strtol(line.substring(1, 3).c_str(), NULL, 16);
+    int recordType = strtol(line.substring(7, 9).c_str(), NULL, 16);
+    if (recordTyoe == 0x01) {
+      Serial.println("[FLASH] Reached the end of the file...");
+      break;
+    }
+    for (int i = 0; i < byteCount; i++) {
+      int dataByte = strtol(line.substring(9 + i * 2, 11 + i * 2).c_str(),NULL, 16);
+      sdDown();
+      megaUp();
+      flashBytes(false, pageAddr, dataByte);
+      flashBytes(true, pageAddr, 0xFF);
+      commitPage(pageAddr);
+      megaDown();
+      sdUp();
+      pageAddr++;
+    }
+  }
+  hexFile.close();
+  sdDown();
+  Serial.println("[FLASH] Firmware flash complete...\n");
 }
 void 
 /* !#!#!#!#!# END: FUNCTIONS #!#!#!#!#! */
