@@ -1,8 +1,8 @@
 /*
-  FIRMWARE FLASHER FOR ATMEGA328P WITH ARDUINO NANO, WITH ADAFRUIT MICROSD BREAKOUT FOR STORAGE
-  Adafruit microSD breakout (ID:254)
-  Atmel Mega 328P
+  ATMEGA328P FIRMWARE FLASH TOOL WITH ARDUINO AND MICROSD
+  Atmel Mega 328P custom pcb
   Arduino Nano
+  Adafruit microSD breakout (ID:254)
 
  ** SDO - Nano.D11
  ** SDI - Nano.D12
@@ -37,12 +37,6 @@ const byte FUSE_H = 0xDA; // Example: High fuse (BOOTSZ=2048W_3800, EESAVE, SPIE
 const byte FUSE_E = 0xFD; // Example: Extended fuse (BODLEVEL=2.7V) <- Gemini Def, double check!! Value from PlatformIO value
 // const byte LOCK_BITS_VAL = 0xCF; // Recommended: No further programming/verification (SPM/LPM in App section disabled). 0x3F for no locks.
 const byte LOCK_BITS_VAL = 0x3F; // No locks applied
-// === Gemini Parsing Variables ===
-uint8_t pageDataBuffer[PAGE_SIZE_BYTES];
-int bytesInPageBuffer = 0;
-uint16_t currentBufferPageBaseWordAddress = 0; // The base word address of the page currently in pageDataBuffer
-const uint16_t PAGE_SIZE_WORDS = 64;       // Page size in words for ATmega328P
-const uint16_t PAGE_SIZE_BYTES = PAGE_SIZE_WORDS * 2;
 /* !#!#!#!#!# END: VARIABLES #!#!#!#!#! */
 
 /* !#!#!#!#!# START: FUNCTIONS #!#!#!#!#! */
@@ -73,19 +67,6 @@ bool sdCheckFile(String checkFile) {
   Serial.println("[SD] File check: " + targetFile + (fileExists ? "exists." : "does NOT exist."));
   return fileExists;
 }
-// void sdReadFileChar(File readFile) {
-//   Serial.println("[SD] Dumping raw file " + readFile + " contents to terminal...");
-//   sdUp();
-//   if (!readFile) {
-//     Serial.println("[SD] Failed to open " + readFile );
-//     return;
-//   }
-//   Serial.println("[SD] Here is the raw file character by character...");
-//   while (hexFile.available()) {
-//     char c = hexFile.read();
-//     Serial.print(c);
-//   }
-// }
 void sdReadFile(File readFile) {
   Serial.println("\n[SD] Dumping raw file " + readFile + " lines to terminal...");
   if (!readFile) {
@@ -210,28 +191,15 @@ void megaProgramFuses() {
 // === Flashing and Parsing Functions ===
 // ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256)
 // "Write program memory page | $4C | adr MSB | adr LSB | $00"
-
-/* GEM ROUTE
-uint8_t hexCharNibble() {
-  -
-}
-uint8_t parseHexByte() {
-  -
-}
-void flushPageBuffer() {
-  -
-}
-*/
-// CO 
-void flashBytes(bool high, uint16_t addr, uint16_t data) {
-  const byte flashCommand[4];
+void flashBytes(bool high, uint16_t addr, uint8_t data) {
+  byte flashCommand[4];
   flashCommand[0] = high ? 0x48 : 0x40;
   flashCommand[1] = (addr >> 8) & 0xFF;
   flashCommand[2] = addr & 0xFF;
   flashCommand[3] = data;
-  Serial.print("[FLASH] Writing " + high ? "HIGH" : "LOW");
+  Serial.print("[FLASH] Writing "); Serial.print(high ? "HIGH" : "LOW");
   Serial.print(" byte at 0x"); Serial.print(addr, HEX); 
-  Serial.print(" = 0x"); Serial.print(data, HEX);
+  Serial.print(" = 0x"); Serial.println(data, HEX);
   megaSendCommand(flashCommand);
 }
 void commitPage(uint16_t addr) {
@@ -310,12 +278,10 @@ void setup() {
 }
 
 /* !#!#!#!#!# END: ADRDUINO SETUP FUNCTION #!#!#!#!#! */
+
 /* !#!#!#!#!# START: ADRDUINO LOOP FUNCTION #!#!#!#!#! */
 
-void loop() {
-  // put your main code here, to run repeatedly:
-
-}
+void loop() {}
 
 /* !#!#!#!#!# END: ADRDUINO LOOP FUNCTION #!#!#!#!#! */
 
