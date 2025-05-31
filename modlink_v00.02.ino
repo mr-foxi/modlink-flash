@@ -291,8 +291,22 @@ void
 /* !#!#!#!#!# START: ADRDUINO SETUP FUNCTION #!#!#!#!#! */
 
 void setup() {
-  // put your setup code here, to run once:
-
+  Serial.begin(serialBaud);
+  SPI.begin();
+  while(!Serial);
+  Serial.Println("\n\t\t\t\t!#!#!#!#!# Starting ATmega328P Firmware Flasher... #!#!#!#!#!\n");
+  megaInit();
+  megaCheckSig();
+  sdInit();
+  if (sdCheckFile()) {
+    megaProgramMode();
+    megaChipErase();
+    megaProgramFuses();
+    flashHex();
+  } else {
+    Serial.println("[FLASH] !!ERROR!! firmware.hex not found!... :c\n");
+  }
+  Serial.Println("\n\t\t\t\t!#!#!#!#!# Terminating ATmega328P Firmware Flasher... #!#!#!#!#!\n");
 }
 
 /* !#!#!#!#!# END: ADRDUINO SETUP FUNCTION #!#!#!#!#! */
