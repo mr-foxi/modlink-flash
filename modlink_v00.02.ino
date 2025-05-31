@@ -32,11 +32,11 @@ const long spiBaud = 100000; // SPI Communication Baud Rate
 const byte chip_signature_atmega328p[3] = {0x1E, 0x95, 0x0F};
 const String chip_name_atmega328p = "ATmega328P";
 // ===  ATmega328P Fuse and Lock Bytes ===
-const byte FUSE_L = 0xFF; // Example: Low fuse for external crystal >8MHz, default startup <- Gemini Def, double check!! Value from PlatformIO value
-const byte FUSE_H = 0xDA; // Example: High fuse (BOOTSZ=2048W_3800, EESAVE, SPIEN enabled) <- Gemini Def, double check!! Value from PlatformIO value
-const byte FUSE_E = 0xFD; // Example: Extended fuse (BODLEVEL=2.7V) <- Gemini Def, double check!! Value from PlatformIO value
-// const byte LOCK_BITS_VAL = 0xCF; // Recommended: No further programming/verification (SPM/LPM in App section disabled). 0x3F for no locks.
-const byte LOCK_BITS_VAL = 0x3F; // No locks applied
+static byte FUSE_L = 0xFF; // Example: Low fuse for external crystal >8MHz, default startup <- Gemini Def, double check!! Value from PlatformIO value
+static byte FUSE_H = 0xDA; // Example: High fuse (BOOTSZ=2048W_3800, EESAVE, SPIEN enabled) <- Gemini Def, double check!! Value from PlatformIO value
+static byte FUSE_E = 0xFD; // Example: Extended fuse (BODLEVEL=2.7V) <- Gemini Def, double check!! Value from PlatformIO value
+// static byte LOCK_BITS_VAL = 0xCF; // Recommended: No further programming/verification (SPM/LPM in App section disabled). 0x3F for no locks.
+static byte LOCK_BITS_VAL = 0x3F; // No locks applied
 // === Gemini Parsing Variables ===
 uint8_t pageDataBuffer[PAGE_SIZE_BYTES];
 int bytesInPageBuffer = 0;
@@ -150,9 +150,6 @@ bool megaCheckSig() {
     return false;
   }
 }
-/* ATmega328P Datasheet 27.8.2 Serial Programming Algorythm
-"the second byte (0x53), will echo back when issuing the third byte of the programming enable instruction."
-*/
 const byte* megaSendCommand(const byte* megaCommand) {
   static byte megaResponse[4];
   Serial.println("[MEGA] Sending Command...");
@@ -170,12 +167,18 @@ const byte* megaSendCommand(const byte* megaCommand) {
   Serial.println();
   return megaResponse;
 }
-
+void megaChipErase() {
+  Serial.println("\n[MEGA] Attempting to erase chip...");
+  const byte eraseCommand[4] = {0xAC, 0x80, 0x00, 0x00}; // ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256) 
+  const byte* megaResponse = megaSendCommand(eraseCommand);
+  delay(15); // Chip erase can take time ~9.3ms max (datasheet: ATmega328P) << GEMINI INFO
+  Serial.println("\n[MEGA] Erase chip command sent...");
+}
 bool megaProgramMode() {
   Serial.println("\n[MEGA] Attempting to enter programming mode...");
-  const byte programCommand[4] = {0xAC, 0x53, 0x00, 0x00};
+  const byte programCommand[4] = {0xAC, 0x53, 0x00, 0x00}; // ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256) 
   const byte* megaResponse = megaSendCommand(programCommand);
-  if (megaRespone[2] = 0x53) {
+  if (megaRespone[2] == 0x53) {
     Serial.println("[MEGA] Recieved 0x53 at expected chip response byte[2]\n");
     return true;
   } else {
@@ -183,16 +186,26 @@ bool megaProgramMode() {
     return false;
   }
 }
-void megaChipErase() {
-  -
-}
-void megaWriteFuse() {
-  -
-}
 void megaProgramFuses() {
-  - 
+  Serial.println("\n[MEGA] Attempting to program chip settings for fuses and lock bits...")
+  const byte fuseL[4] = {0xAC, 0xA0, 0x00, FUSE_L}; // ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256) 
+  const byte fuseH[4] = {0xAC, 0xA8, 0x00, FUSE_H};
+  const byte fuseE[4] = {0xAC, 0xA4, 0x00, FUSE_E};
+  const byte lockBits[4] = {0xAC, 0xE0, 0x00, LOCK_BITS_VAL};
+  Serial.println("[MEGA] Attempting to program Fuse L...")
+  megaSendCommand(fuseL);
+  Serial.println("[MEGA] Attempting to program Fuse H...")
+  megaSendCommand(fuseH);
+  Serial.println("[MEGA] Attempting to program Fuse E...")
+  megaSendCommand(fuseE);
+  Serial.println("[MEGA] Attempting to program Lock Bits...")
+  megaSendCommand(lockBits);
+  Serial.println("[MEGA] All commands for fuses and lock bits have been sent...\n")
 }
 // === Flashing and Parsing Functions ===
+// ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256)
+// "Write program memory page | $4C | adr MSB | adr LSB | $00"
+
 /* GEM ROUTE
 uint8_t hexCharNibble() {
   -
@@ -203,14 +216,14 @@ uint8_t parseHexByte() {
 void flushPageBuffer() {
   -
 }
-*//* CO ROUTE
+*/
+// CO 
 void flashByte() {
   - 
 }
 void commitPage() {
   -
 }
-*/
 bool flashHex() {
   -
 }
