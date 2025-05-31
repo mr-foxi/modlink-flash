@@ -12,31 +12,7 @@
 
   BY MR-FOXI MAY/JUNE 2025
 */
-/*  HERE IS A FUNCTION LIST
-SD:
-  - sdUP
-  - sdDown
-  - sdInit
-  - sdCheckFile (bool)
-  - sdReadFileChar
-  - sdReadFile
-ATmega328P: 
-  - megaUp
-  - megaDown
-  - megaInit
-  - megaReadSig
-  - megaCheckSig
-  - megaProgramMode
-  - megaChipErase
-  - megaWriteFuse
-  - megaProgramFuses
-Flashing:
-  - flashHex (bool)
-  - hexCharNibble (gemini)
-  - parseHexByte (gemini)
-  - flushPageBuffer (gemini)
-  - flashByte (copilot)
-  - commitPage (copilot)
+
 /* !#!#!#!#!# START: INCLUDED LIBRARIES #!#!#!#!#! */
 #include <SD.h>
 #include <SPI.h>
@@ -59,9 +35,7 @@ const String chip_name_atmega328p = "ATmega328P";
 const byte FUSE_L = 0xFF; // Example: Low fuse for external crystal >8MHz, default startup <- Gemini Def, double check!! Value from PlatformIO value
 const byte FUSE_H = 0xDA; // Example: High fuse (BOOTSZ=2048W_3800, EESAVE, SPIEN enabled) <- Gemini Def, double check!! Value from PlatformIO value
 const byte FUSE_E = 0xFD; // Example: Extended fuse (BODLEVEL=2.7V) <- Gemini Def, double check!! Value from PlatformIO value
- /* GEMINI SUGGESTED vv
-const byte LOCK_BITS_VAL = 0xCF; // Recommended: No further programming/verification (SPM/LPM in App section disabled). 0x3F for no locks.
- */// GEMINI SUGGESTED ^^ Prevent Any Further Programming? Maybe good for security??
+// const byte LOCK_BITS_VAL = 0xCF; // Recommended: No further programming/verification (SPM/LPM in App section disabled). 0x3F for no locks.
 const byte LOCK_BITS_VAL = 0x3F; // No locks applied
 // === Gemini Parsing Variables ===
 uint8_t pageDataBuffer[PAGE_SIZE_BYTES];
@@ -77,13 +51,13 @@ void sdUp() {
   Serial.println("[SD] Activating microSD...");
   digitalWrite(SD_CS, HIGH)
   Serial.println("[SD] CS pin set: HIGH");
-  delay(10);
+  delay(50);
 }
 void sdDown() {
   Serial.println("[SD] De-Activating microSD...");
   digitalWrite(SD_CS, LOW)
   Serial.println("[SD] CS pin set: LOW");
-  delay(10);
+  delay(50);
 }
 void sdInit() {
   Serial.println("\n[SD] Initializing microSD...");
@@ -130,13 +104,13 @@ void megaUp() {
   Serial.println("[MEGA] Activating ATmega328P...");
   digitalWrite(MEGA_RESET, HIGH);
   Serial.println("[MEGA] Reset pin set: HIGH");
-  delay(10);
+  delay(50);
 }
 void megaDown() {
   Serial.println("[MEGA] De-Activating ATmega328P...");
   digitalWrite(MEGA_RESET, LOW);
   Serial.println("[MEGA] Reset pin set: LOW");
-  delay(10);
+  delay(50);
 }
 void megaInit() {
   Serial.println("\n[MEGA] Initializing ATmega328P...");
@@ -145,8 +119,8 @@ void megaInit() {
   sdUp();
 }
 const byte* megaReadSig() {
-  megaUp();
   Serial.println("\n[MEGA] Reading chip signature...");
+  megaDown();
   static byte chipSig[3];
   SPI.beginTransaction(SPISettings(spiBaud, MSBFIRST, SPI_MODE0));
   // Read signature byte 0 (Manufacturer ID)
@@ -157,28 +131,57 @@ const byte* megaReadSig() {
   SPI.transfer(0x30); SPI.transfer(0x00); SPI.transfer(0x02); chipSig[2] = SPI.transfer(0x00);
   SPI.endTransaction();
   // Serial.println("[MEGA] Chip signature: 0x" + String(sig[0], HEX) + "0x" + String(sig[1], HEX) + "0x" + String(sig[2], HEX) + "\n");
-  Serial.print("[MEGA] Chip Signature: ");
+  Serial.print("[MEGA] Chip signature: ");
   for (int i = 0; i < 3; i++) {
     Serial.print("0x");
     if (chipSig[i] < 0x10) Serial.print("0"); // Add prefix 0 if required for visual formatting
     Serial.print(chipSig[i], HEX);
     if (i < 2) Serial.print(" ");
   }
-  megaDown();
   return chipSig;
 }
 bool megaCheckSig() {
   const byte* chipSig = megaReadSig();
   if (chipSig[0] == 0x1E && chipSig[1] == 0x95 && chipSig[2] == 0x0F) {
-    Serial.println("[MEGA] Chip Signature matches " + chip_name_atmega328p + "\n");
+    Serial.println("[MEGA] Chip signature matches " + chip_name_atmega328p + "\n");
     return true;
   } else {
-    Serial.println("[MEGA] Chip Signature does NOT match the list of known chip signatures \n");
+    Serial.println("[MEGA] Chip signature does NOT match the list of known chip signatures \n");
     return false;
   }
 }
-void megaProgramMode() {
-  -
+/* ATmega328P Datasheet 27.8.2 Serial Programming Algorythm
+"the second byte (0x53), will echo back when issuing the third byte of the programming enable instruction."
+*/
+const byte* megaSendCommand(const byte* megaCommand) {
+  static byte megaResponse[4];
+  Serial.println("[MEGA] Sending Command...");
+  megaDown();
+  Serial.print("[MEGA] Chip Response: ");
+  SPI.beginTransaction(SPISettings(spiBaud, MSBFIRST, SPI_MODE0));
+  for (int i = 0; i < 4; i++) {
+    megaResponse[i] = SPI.transfer(megaCommand[i]);
+    Serial.print("0x");
+    if (megaResponse[i] < 0x10) Serial.print("0");
+    Serial.print(megaResponse[i], HEX);
+    if (i < 3) Serial.print(" "); 
+  }
+  SPI.endTransaction();
+  Serial.println();
+  return megaResponse;
+}
+
+bool megaProgramMode() {
+  Serial.println("\n[MEGA] Attempting to enter programming mode...");
+  const byte programCommand[4] = {0xAC, 0x53, 0x00, 0x00};
+  const byte* megaResponse = megaSendCommand(programCommand);
+  if (megaRespone[2] = 0x53) {
+    Serial.println("[MEGA] Recieved 0x53 at expected chip response byte[2]\n");
+    return true;
+  } else {
+    Serial.println("[MEGA] Failed to initiate programming mode...\n");
+    return false;
+  }
 }
 void megaChipErase() {
   -
@@ -190,7 +193,7 @@ void megaProgramFuses() {
   - 
 }
 // === Flashing and Parsing Functions ===
-/* GEMINI ROUTE
+/* GEM ROUTE
 uint8_t hexCharNibble() {
   -
 }
@@ -200,7 +203,7 @@ uint8_t parseHexByte() {
 void flushPageBuffer() {
   -
 }
-*//* COPILOT ROUTE
+*//* CO ROUTE
 void flashByte() {
   - 
 }
