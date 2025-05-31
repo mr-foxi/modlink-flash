@@ -20,7 +20,7 @@
 
 /* !#!#!#!#!# START: VARIABLES #!#!#!#!#! */
 // === User Variables ===
-const char* targetFile = "firmware.hex";
+const String targetFile = "firmware.hex";
 // ===  Pin Definition Variables ===
 const int SD_CS = 4; // Micro-SD CS Pin
 const int MEGA_RESET = 10; // ATmega328p Reset Pin
@@ -43,13 +43,13 @@ const byte LOCK_BITS_VAL = 0x3F; // No locks applied
 // === SD Functions ===
 void sdUp() {
   Serial.println("[SD] Activating microSD...");
-  digitalWrite(SD_CS, HIGH)
+  digitalWrite(SD_CS, HIGH);
   Serial.println("[SD] CS pin set: HIGH");
   delay(50);
 }
 void sdDown() {
   Serial.println("[SD] De-Activating microSD...");
-  digitalWrite(SD_CS, LOW)
+  digitalWrite(SD_CS, LOW);
   Serial.println("[SD] CS pin set: LOW");
   delay(50);
 }
@@ -62,21 +62,23 @@ void sdInit() {
 bool sdCheckFile(String checkFile) {
   Serial.println("\n[SD] Checking for file: " + checkFile);
   sdUp();
-  bool fileExists SD.exists(checkFile);
+  bool fileExists = SD.exists(checkFile);
   sdDown();
-  Serial.println("[SD] File check: " + targetFile + (fileExists ? "exists." : "does NOT exist."));
+  Serial.print("[SD] File check: "); Serial.print(targetFile); Serial.println(fileExists ? " exists." : " does NOT exist.");
   return fileExists;
 }
-void sdReadFile(File readFile) {
-  Serial.println("\n[SD] Dumping raw file " + readFile + " lines to terminal...");
+void sdReadFile(String dumpFile) {
+  Serial.println("\n[SD] Attempting to dump raw file lines to terminal...");
+  File readFile = SD.open(dumpFile);
   if (!readFile) {
-    Serial.println("[SD] Failed to open " + readFile + "\n");
+    Serial.println("[SD] Failed to open file\n");
     return;
   }
-  // Serial.println("[SD] Here is the file line by line...");
   while (readFile.available()) {
-    String line = readFile.readStringUntil('\n').trim();
-    Serial.println("[SD] " + readFile + " line: " + line);
+    String line = readFile.readStringUntil('\n');
+    line.trim();
+    Serial.print("[SD] line: ");
+    Serial.print(line);
     Serial.println("[SD] End of file...\n");
   }
 }
@@ -111,7 +113,6 @@ const byte* megaReadSig() {
   // Read signature byte 2 (Device ID part 2)
   SPI.transfer(0x30); SPI.transfer(0x00); SPI.transfer(0x02); chipSig[2] = SPI.transfer(0x00);
   SPI.endTransaction();
-  // Serial.println("[MEGA] Chip signature: 0x" + String(sig[0], HEX) + "0x" + String(sig[1], HEX) + "0x" + String(sig[2], HEX) + "\n");
   Serial.print("[MEGA] Chip signature: ");
   for (int i = 0; i < 3; i++) {
     Serial.print("0x");
@@ -159,7 +160,7 @@ bool megaProgramMode() {
   Serial.println("\n[MEGA] Attempting to enter programming mode...");
   const byte programCommand[4] = {0xAC, 0x53, 0x00, 0x00}; // ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256) 
   const byte* megaResponse = megaSendCommand(programCommand);
-  if (megaRespone[2] == 0x53) {
+  if (megaResponse[2] == 0x53) {
     Serial.println("[MEGA] Recieved 0x53 at expected chip response byte[2]\n");
     return true;
   } else {
@@ -173,7 +174,7 @@ bool megaProgramMode() {
   }
 }
 void megaProgramFuses() {
-  Serial.println("\n[MEGA] Attempting to program chip settings for fuses and lock bits...")
+  Serial.println("\n[MEGA] Attempting to program chip settings for fuses and lock bits...");
   const byte fuseL[4] = {0xAC, 0xA0, 0x00, FUSE_L}; // ATmega328P Datasheet 27.8.3 Serial Programming Instruction set (page:256) 
   const byte fuseH[4] = {0xAC, 0xA8, 0x00, FUSE_H};
   const byte fuseE[4] = {0xAC, 0xA4, 0x00, FUSE_E};
@@ -203,7 +204,7 @@ void flashBytes(bool high, uint16_t addr, uint8_t data) {
   megaSendCommand(flashCommand);
 }
 void commitPage(uint16_t addr) {
-  const byte commitCommand[4];
+  byte commitCommand[4];
   commitCommand[0] = 0x4C;
   commitCommand[1] = (addr >> 8) & 0xFF;
   commitCommand[2] = addr & 0xFF;
@@ -226,14 +227,15 @@ bool flashHex() {
   uint16_t pageAddr = 0;
   const uint16_t pageSize = 64;
   while (hexFile.available()) {
-    String line = hexFile.readStringUntil('\n').trim();
-    if (line.charAT(0) != ':') {
-      Serial.println("[FLASH] !!ERROR!! firmware.hex line did NOT start with ':'")
+    String line = hexFile.readStringUntil('\n');
+    line.trim();
+    if (line.charAt(0) != ':') {
+      Serial.println("[FLASH] !!ERROR!! firmware.hex line did NOT start with ':'");
       continue;
     }
     int byteCount = strtol(line.substring(1, 3).c_str(), NULL, 16);
     int recordType = strtol(line.substring(7, 9).c_str(), NULL, 16);
-    if (recordTyoe == 0x01) {
+    if (recordType == 0x01) {
       Serial.println("[FLASH] Reached the end of the file...");
       break;
     }
@@ -253,20 +255,19 @@ bool flashHex() {
   sdDown();
   Serial.println("[FLASH] Firmware flash complete...\n");
 }
-void 
 /* !#!#!#!#!# END: FUNCTIONS #!#!#!#!#! */
-
 /* !#!#!#!#!# START: ADRDUINO SETUP FUNCTION #!#!#!#!#! */
 
 void setup() {
   Serial.begin(serialBaud);
   SPI.begin();
-  while(!Serial);
-  Serial.Println("\n\t\t\t\t!#!#!#!#!# Starting ATmega328P Firmware Flasher... #!#!#!#!#!\n");
+  while (!Serial);
+  Serial.println("\n\t\t\t\t!#!#!#!#!# Starting ATmega328P Firmware Flasher... #!#!#!#!#!\n");
   megaInit();
   megaCheckSig();
   sdInit();
-  if (sdCheckFile()) {
+  if (sdCheckFile(targetFile)) sdReadFile(targetFile);
+  if (sdCheckFile(targetFile)) {
     megaProgramMode();
     megaChipErase();
     megaProgramFuses();
@@ -274,11 +275,10 @@ void setup() {
   } else {
     Serial.println("[FLASH] !!ERROR!! firmware.hex not found!... :c\n");
   }
-  Serial.Println("\n\t\t\t\t!#!#!#!#!# Terminating ATmega328P Firmware Flasher... #!#!#!#!#!\n");
+  Serial.println("\n\t\t\t\t!#!#!#!#!# Terminating ATmega328P Firmware Flasher... #!#!#!#!#!\n");
 }
 
 /* !#!#!#!#!# END: ADRDUINO SETUP FUNCTION #!#!#!#!#! */
-
 /* !#!#!#!#!# START: ADRDUINO LOOP FUNCTION #!#!#!#!#! */
 
 void loop() {}
