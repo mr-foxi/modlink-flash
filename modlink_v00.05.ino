@@ -12,7 +12,7 @@ void sdDown() {
   delay(50);
 }
 void sdInit() {
-  Serial.println("\n[SD] Init...");
+  Serial.println("[SD] Init...");
   pinMode(4, OUTPUT);
   sdUp();
 }
@@ -37,17 +37,17 @@ void megaDown() {
   delay(50);
 }
 void megaInit() {
-  Serial.println("\n[MEGA] Init...");
+  Serial.println("[MEGA] Init...");
   pinMode(10, OUTPUT);
   megaUp();
 }
 void megaChipErase() {
-  Serial.println("\n[MEGA] Erase...");
+  Serial.println("[MEGA] Erase...");
   megaSendCommand(0x80, 0x00);
   delay(15);
 }
 bool megaProgramMode() {
-  Serial.println("\n[MEGA] Program...");
+  Serial.println("[MEGA] Program...");
   byte response = megaSendCommand(0x53, 0x00);
   if (response == 0x53) {
     Serial.println("[MEGA] Recieved 0x53 byte[2]\n");
@@ -63,7 +63,7 @@ const byte megaSendCommand(byte command, byte value) {
   static byte megaResponse;
   Serial.println("[MEGA] Sending Command...");
   megaDown();
-  SPI.beginTransaction(SPISettings(100000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(5000, MSBFIRST, SPI_MODE0));
   SPI.transfer(0xAC);
   SPI.transfer(command);
   megaResponse = SPI.transfer(0x00);
@@ -79,7 +79,7 @@ void megaProgramFuses() {
   megaSendCommand(0xE0, 0x3F);
 }
 void flashBytes(bool high, uint16_t addr, uint8_t data) {
-  SPI.beginTransaction(SPISettings(100000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(5000, MSBFIRST, SPI_MODE0));
   SPI.transfer(high ? 0x48 : 0x40); SPI.transfer((addr >> 8) & 0xFF); SPI.transfer(addr & 0xFF); SPI.transfer(data);
   SPI.endTransaction();
   Serial.print("[FLASH] Writing "); Serial.print(high ? "HIGH" : "LOW");
@@ -87,18 +87,18 @@ void flashBytes(bool high, uint16_t addr, uint8_t data) {
   Serial.print(" = 0x"); Serial.println(data, HEX);
 }
 void commitPage(uint16_t addr) {
-  SPI.beginTransaction(SPISettings(100000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(5000, MSBFIRST, SPI_MODE0));
   SPI.transfer(0x4C); SPI.transfer((addr >> 8) & 0xFF); SPI.transfer(addr & 0xFF); SPI.transfer(0x00);
   SPI.endTransaction();
   delay(15);
 }
 bool flashHex() {
-  Serial.println("\n[FLASH] Starting...");
+  Serial.println("[FLASH] Starting...");
   megaDown();
   sdUp();
   File hexFile = SD.open("firmware.hex");
   if (!hexFile) {
-    Serial.println("[FLASH] Failed...\n");
+    Serial.println("[FLASH] Failed...");
     return;
   }
   uint16_t pageAddr = 0;
